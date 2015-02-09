@@ -1,0 +1,31 @@
+Source: darkhttpd
+Section: httpd
+Priority: optional
+Maintainer: Mateusz Łukasik <mati75@linuxmint.pl>
+Build-Depends: debhelper (>= 9)
+Standards-Version: 3.9.6
+Homepage: http://unix4lyfe.org/darkhttpd/
+
+Package: darkhttpd
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Provides: httpd
+Recommends: logrotate
+Description: secure, lightweight, fast HTTP server
+ darkhttpd is a secure, lightweight, fast, single-threaded 
+ HTTP/1.1 server for static content. Features: 
+ .
+  * Single binary, no other files, no installation needed,
+  * Standalone, doesn't need inetd or ucspi-tcp,
+  * No messing around with config files,
+  * Written in C - efficient and portable,
+  * Small memory footprint,
+  * Event loop, single threaded - no fork() or pthreads,
+  * Generates directory listings,
+  * Supports HTTP GET and HEAD requests,
+  * Supports Range / partial content,
+  * Supports If-Modified-Since,
+  * Supports Keep-Alive connections,
+  * Can serve 301 redirects based on Host header,
+  * Uses sendfile() on FreeBSD, Solaris and Linux
+ .

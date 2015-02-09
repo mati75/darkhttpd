@@ -1,0 +1,13 @@
+# Defaults for darkhttpd initscript
+# sourced by /etc/init.d/darkhttpd
+# installed at /etc/default/darkhttpd by the maintainer scripts
+
+#
+# uncomment the next line run gatling automatically at startup
+#
+#START_DAEMON="YES"
+
+#
+# Darkhttpd startup settings
+#
+DAEMON_OPTS="/var/www --daemon --uid nobody --gid nobody --chroot"

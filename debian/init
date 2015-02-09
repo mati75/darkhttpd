@@ -1,0 +1,89 @@
+#! /bin/sh
+### BEGIN INIT INFO
+# Provides:          darkhttpd
+# Required-Start:    $network $remote_fs
+# Required-Stop:     $network $remote_fs
+# Should-Start:
+# Should-Stop:
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+# Short-Description: darkhttpd start script
+# Description:       this script starts darkhttpd
+### END INIT INFO
+
+. /lib/lsb/init-functions
+
+# Globals
+PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
+DAEMON=/usr/bin/darkhttpd
+NAME=darkhttpd
+DESC="web server"
+
+test -x $DAEMON || exit 0
+
+# Include darkhttpd defaults if available
+if [ -f /etc/default/darkhttpd ]
+then
+	. /etc/default/darkhttpd
+fi
+
+set -e
+
+# Functions
+start() {
+	if [ "$START" = "1" ]
+	then
+		echo -n "Starting $DESC: "
+		start-stop-daemon --start --quiet --pidfile /var/run/$NAME.pid \
+			--exec $DAEMON -- $DAEMON_OPTS
+		echo "$NAME."
+	else
+		printf "Not starting darkhttpd (edit /etc/default/darkhttpd to enable)"
+		exit 0
+	fi
+}
+
+stop() {
+	echo -n "Stopping $DESC: "
+	# Get pid number
+	if [ -e /var/run/$NAME.pid ]
+	then
+		PID=`cat /var/run/$NAME.pid`
+		if [ -d /proc/$PID ]
+		then
+			start-stop-daemon -v --stop --quiet --oknodo --pidfile /var/run/$NAME.pid
+		else
+			# we need to remove the pidfile manually
+			if [ -e /var/run/$NAME.pid ]
+			then
+				rm -f /var/run/$NAME.pid
+			fi
+		fi
+	else 
+		start-stop-daemon --stop --quiet --oknodo --name $DAEMON
+	fi
+	echo "$NAME."
+}
+
+case "$1" in
+  start)
+	start
+	;;
+
+  stop)
+	stop
+	;;
+
+  restart|force-reload)
+	stop
+	start
+	;;
+
+  *)
+	N=/etc/init.d/$NAME
+	echo "Usage: $N {start|stop|restart|force-reload}" >&2
+	exit 1
+	;;
+esac
+
+exit 0

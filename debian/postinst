@@ -1,0 +1,15 @@
+#!/bin/sh
+
+set -e
+
+if [ "$1" = configure ] ; then
+	if [ ! -e /var/www/default/index.* ] ; then
+		mkdir -p /var/www/default
+		cp /usr/share/darkhttpd/index.html /var/www/default/index.html
+	fi
+fi
+
+#DEBHELPER#
+
+exit 0
+

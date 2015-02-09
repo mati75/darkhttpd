@@ -1,0 +1,13 @@
+/var/log/darkhttpd.log {
+	weekly
+	missingok
+	rotate 52
+	compress
+	delaycompress
+	notifempty
+	create 640 root adm
+	sharedscripts
+	postrotate
+		start-stop-daemon --oknodo --pidfile /var/run/darkhttpd.pid --stop --signal USR1 >/dev/null 2>&1
+	endscript
+}
