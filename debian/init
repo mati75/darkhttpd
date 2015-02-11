@@ -34,7 +34,7 @@ start() {
 	if [ "$START" = "1" ]
 	then
 		echo -n "Starting $DESC: "
-		start-stop-daemon --start --quiet --pidfile /var/run/$NAME.pid \
+		start-stop-daemon --start --quiet --pidfile /run/$NAME.pid \
 			--exec $DAEMON -- $DAEMON_OPTS
 		echo "$NAME."
 	else
@@ -46,20 +46,20 @@ start() {
 stop() {
 	echo -n "Stopping $DESC: "
 	# Get pid number
-	if [ -e /var/run/$NAME.pid ]
+	if [ -e /run/$NAME.pid ]
 	then
-		PID=`cat /var/run/$NAME.pid`
+		PID=`cat /run/$NAME.pid`
 		if [ -d /proc/$PID ]
 		then
-			start-stop-daemon -v --stop --quiet --oknodo --pidfile /var/run/$NAME.pid
+			start-stop-daemon -v --stop --quiet --oknodo --pidfile /run/$NAME.pid
 		else
 			# we need to remove the pidfile manually
-			if [ -e /var/run/$NAME.pid ]
+			if [ -e /run/$NAME.pid ]
 			then
-				rm -f /var/run/$NAME.pid
+				rm -f /run/$NAME.pid
 			fi
 		fi
-	else 
+	else
 		start-stop-daemon --stop --quiet --oknodo --name $DAEMON
 	fi
 	echo "$NAME."
@@ -79,6 +79,9 @@ case "$1" in
 	start
 	;;
 
+  status)
+	status_of_proc -p /run/$NAME.pid "$DAEMON" "$NAME" && exit 0 || exit $?
+	;;
   *)
 	N=/etc/init.d/$NAME
 	echo "Usage: $N {start|stop|restart|force-reload}" >&2
