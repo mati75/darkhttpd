@@ -2,12 +2,5 @@
 # sourced by /etc/init.d/darkhttpd
 # installed at /etc/default/darkhttpd by the maintainer scripts
 
-#
-# uncomment the next line run gatling automatically at startup
-#
-#START_DAEMON="YES"
-
-#
-# Darkhttpd startup settings
-#
-DAEMON_OPTS="/var/www --daemon --uid www-data --gid www-data --chroot"
+DARKHTTPD_ROOT="/var/www"
+DARKHTTPD_FLAGS="--uid www-data --gid www-data --log /var/log/darkhttpd/access.log"
