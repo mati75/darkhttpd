@@ -10,4 +10,4 @@
 #
 # Darkhttpd startup settings
 #
-DAEMON_OPTS="/var/www --daemon --uid nobody --gid nobody --chroot"
+DAEMON_OPTS="/var/www --daemon --uid www-data --gid www-data --chroot"
