@@ -1,0 +1,9 @@
+[Unit]
+Description=Darkhttpd Webserver
+
+[Service]
+ExecStart=/usr/bin/darkhttpd /var/www --daemon --uid www-data --gid www-data --chroot
+Type=forking
+
+[Install]
+WantedBy=multi-user.target
