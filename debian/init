@@ -18,73 +18,57 @@ PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
 DAEMON=/usr/bin/darkhttpd
 NAME=darkhttpd
 DESC="web server"
+PIDFILE=/var/run/darkhttpd.pid
 
 test -x $DAEMON || exit 0
 
 # Include darkhttpd defaults if available
-if [ -f /etc/default/darkhttpd ]
-then
-	. /etc/default/darkhttpd
-fi
+[ -r /etc/default/darkhttpd ] && . /etc/default/darkhttpd
 
 set -e
 
-# Functions
-start() {
-	if [ "$START" = "1" ]
-	then
-		echo -n "Starting $DESC: "
-		start-stop-daemon --start --quiet --pidfile /run/$NAME.pid \
-			--exec $DAEMON -- $DAEMON_OPTS
-		echo "$NAME."
-	else
-		printf "Not starting darkhttpd (edit /etc/default/darkhttpd to enable)"
-		exit 0
+if [ "$1" != status ]; then
+	# be sure there is a /var/run/darkhttpd, even with tmpfs
+	# The directory is defined as volatile and may thus be non-existing
+	# after a boot (DPM §9.3.2)
+	if ! dpkg-statoverride --list /var/run/darkhttpd >/dev/null 2>&1; then
+		install -d -o www-data -g www-data -m 0750 "/var/run/darkhttpd"
 	fi
-}
+fi
 
-stop() {
-	echo -n "Stopping $DESC: "
-	# Get pid number
-	if [ -e /run/$NAME.pid ]
-	then
-		PID=`cat /run/$NAME.pid`
-		if [ -d /proc/$PID ]
-		then
-			start-stop-daemon -v --stop --quiet --oknodo --pidfile /run/$NAME.pid
-		else
-			# we need to remove the pidfile manually
-			if [ -e /run/$NAME.pid ]
-			then
-				rm -f /run/$NAME.pid
-			fi
-		fi
-	else
-		start-stop-daemon --stop --quiet --oknodo --name $DAEMON
-	fi
-	echo "$NAME."
-}
+
 
 case "$1" in
   start)
-	start
+	log_daemon_msg "Starting $DESC"
+	start-stop-daemon --start --quiet --pidfile $PIDFILE --make-pidfile \
+	--exec $DAEMON -- $DARKHTTPD_ROOT --daemon $DARKHTTPD_FLAGS || true
 	;;
 
   stop)
-	stop
+	log_daemon_msg "Stopping $DESC" $NAME
+	if start-stop-daemon --stop --retry 30 --oknodo --quiet \
+		--pidfile $PIDFILE --exec $DAEMON
+	then
+		rm -f $PIDFILE
+		log_end_msg 0
+	else
+		log_end_msg 1
+	fi
 	;;
 
   restart|force-reload)
-	stop
-	start
+	$0 stop
+	sleep 2
+	$0 start
 	;;
 
   status)
-	status_of_proc -p /run/$NAME.pid "$DAEMON" "$NAME" && exit 0 || exit $?
+	status_of_proc -p "$PIDFILE" "$DAEMON" darkhttpd && exit 0 || exit $?
 	;;
   *)
 	N=/etc/init.d/$NAME
-	echo "Usage: $N {start|stop|restart|force-reload}" >&2
+	echo "Usage: $N {start|stop|restart|force-reload|status}" >&2
 	exit 1
 	;;
 esac
