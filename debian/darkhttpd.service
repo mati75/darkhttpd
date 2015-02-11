@@ -1,8 +1,9 @@
 [Unit]
-Description=Darkhttpd Webserver
+Description=Darkhttpd Webserver daemon
 
 [Service]
-ExecStart=/usr/bin/darkhttpd /var/www --daemon --uid www-data --gid www-data --chroot
+EnvironmentFile=-/etc/default/darkhttpd
+ExecStart=/usr/bin/darkhttpd $DARKHTTPD_ROOT --daemon $DARKHTTPD_FLAGS
 Type=forking
 
 [Install]
