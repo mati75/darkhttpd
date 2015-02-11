@@ -1,0 +1,20 @@
+Description: Use debhelper CPPFLAGS CFLAGS LDFLAGS in build
+Author: Mateusz Łukasik <mati75@linuxmint.pl>
+
+--- a/Makefile
++++ b/Makefile
+@@ -1,11 +1,11 @@
+-CC?=cc
+-CFLAGS?=-O
++CC?+=cc
++CFLAGS?+=-O
+ LIBS=`[ \`uname\` = "SunOS" ] && echo -lsocket -lnsl`
+ 
+ all: darkhttpd
+ 
+ darkhttpd: darkhttpd.c
+-	$(CC) $(CFLAGS) $(LIBS) darkhttpd.c -o $@
++	$(CC) $(CFLAGS) $(CPPFLAGS) $(LDFLAGS) $(LIBS) darkhttpd.c -o $@
+ 
+ clean:
+ 	rm -f darkhttpd core darkhttpd.core
