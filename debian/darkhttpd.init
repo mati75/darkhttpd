@@ -36,17 +36,19 @@ if [ "$1" != status ]; then
 	fi
 fi
 
-
-
 case "$1" in
   start)
-	log_daemon_msg "Starting $DESC"
-	start-stop-daemon --start --quiet --pidfile $PIDFILE --make-pidfile \
-	--exec $DAEMON -- $DARKHTTPD_ROOT --daemon $DARKHTTPD_FLAGS || true
+	log_daemon_msg "Starting $DESC: "$NAME
+	if start-stop-daemon --start --quiet --pidfile $PIDFILE --make-pidfile \
+	--background --exec $DAEMON -- $DARKHTTPD_ROOT $DARKHTTPD_FLAGS || true; then
+	log_end_msg 0
+	else
+	log_end_msg 1
+	fi
 	;;
 
   stop)
-	log_daemon_msg "Stopping $DESC" $NAME
+	log_daemon_msg "Stopping $DESC: "$NAME
 	if start-stop-daemon --stop --retry 30 --oknodo --quiet \
 		--pidfile $PIDFILE --exec $DAEMON
 	then
