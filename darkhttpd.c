@@ -2538,6 +2538,10 @@ int main(int argc, char **argv) {
         printf("chrooted to `%s'\n", wwwroot);
         wwwroot[0] = '\0'; /* empty string */
     }
+    
+    /* create pidfile */
+    if (pidfile_name) pidfile_create();
+    
     if (drop_gid != INVALID_GID) {
         gid_t list[1];
         list[0] = drop_gid;
@@ -2552,9 +2556,6 @@ int main(int argc, char **argv) {
             err(1, "setuid(%d)", (int)drop_uid);
         printf("set uid to %d\n", (int)drop_uid);
     }
-
-    /* create pidfile */
-    if (pidfile_name) pidfile_create();
 
     if (want_daemon) daemonize_finish();
 
