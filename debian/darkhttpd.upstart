@@ -1,0 +1,12 @@
+description "Darkhttpd Webserver daemon"
+
+start on runlevel [2345]
+stop on runlevel [016]
+
+script
+	if test -r /etc/default/darkhttpd; then
+		. /etc/default/darkhttpd
+	fi
+	
+	exec /usr/bin/darkhttpd $DARKHTTPD_ROOT $DARKHTTPD_FLAGS
+end script
