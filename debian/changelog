@@ -1,5 +1,5 @@
-darkhttpd (1.11-1) UNRELEASED; urgency=low
+darkhttpd (1.11-1) unstable; urgency=low
 
   * Initial release. (Closes: #775096) (LP: #901274)
 
- -- Mateusz Łukasik <mati75@linuxmint.pl>  Mon, 14 Oct 2013 14:23:07 +0200
+ -- Mateusz Łukasik <mati75@linuxmint.pl>  Thu, 12 Feb 2015 16:57:59 +0100
