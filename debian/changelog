@@ -2,4 +2,4 @@ darkhttpd (1.12-1) unstable; urgency=low
 
   * Initial release. (Closes: #775096) (LP: #901274)
 
- -- Mateusz Łukasik <mati75@linuxmint.pl>  Wed, 11 Mar 2015 23:12:09 +0100
+ -- Mateusz Łukasik <mati75@linuxmint.pl>  Thu, 28 Jan 2016 16:46:05 +0100
