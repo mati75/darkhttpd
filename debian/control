@@ -3,7 +3,7 @@ Section: httpd
 Priority: optional
 Maintainer: Mateusz Łukasik <mati75@linuxmint.pl>
 Build-Depends: debhelper (>= 9), dh-systemd
-Standards-Version: 3.9.6
+Standards-Version: 3.9.7
 Homepage: http://unix4lyfe.org/darkhttpd/
 
 Package: darkhttpd
