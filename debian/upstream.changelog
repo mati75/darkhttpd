@@ -10,3 +10,4 @@
 1.9 - Added --no-keepalive, --forward, --no-server-id.
 1.10 - Added --forward-all, strip query parameters from URL.
 1.11 - Cleanups, call setgroups() before setgid().
+1.12 - Added --no-listing, --default-mimetype, improve URL escaping, set listing charset to UTF-8, added support for IPv6.
