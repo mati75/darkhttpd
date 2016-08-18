@@ -3,9 +3,9 @@
 set -e
 
 if [ "$1" = configure ] ; then
-	if [ ! -e /var/www/default/index.* ] ; then
-		mkdir -p /var/www/default
-		cp /usr/share/darkhttpd/index.html /var/www/default/index.html
+	if [ ! -e /var/www/darkhttpd/index.* ] ; then
+		mkdir -p /var/www/darkhttpd
+		cp /usr/share/darkhttpd/index.html /var/www/darkhttpd/index.html
 	fi
 fi
 

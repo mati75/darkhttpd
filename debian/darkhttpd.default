@@ -2,5 +2,5 @@
 # sourced by /etc/init.d/darkhttpd
 # installed at /etc/default/darkhttpd by the maintainer scripts
 
-DARKHTTPD_ROOT="/var/www"
+DARKHTTPD_ROOT="/var/www/darkhttpd"
 DARKHTTPD_FLAGS="--uid www-data --gid www-data --log /var/log/darkhttpd/access.log"

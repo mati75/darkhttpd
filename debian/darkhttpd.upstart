@@ -8,5 +8,5 @@ script
 		. /etc/default/darkhttpd
 	fi
 	
-	exec /usr/bin/darkhttpd $DARKHTTPD_ROOT $DARKHTTPD_FLAGS
+	exec /usr/bin/darkhttpd $DARKHTTPD_ROOT --daemon $DARKHTTPD_FLAGS
 end script

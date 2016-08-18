@@ -3,10 +3,10 @@
 set -e
 
 if [ "$1" = remove ] ; then
-        MD5SUM="`md5sum /var/www/default/index.html 2>/dev/null | cut -d ' ' -f 1`"
+        MD5SUM="`md5sum /var/www/darkhttpd/index.html 2>/dev/null | cut -d ' ' -f 1`"
         case "$MD5SUM" in
 		5a65a5830e4c5a298f4ca16b41a85a3d)
-                        rm -f /var/www/default/index.html
+                        rm -f /var/www/darkhttpd/index.html
 			rmdir --ignore-fail-on-non-empty /var/www/default
                         ;;
         esac
