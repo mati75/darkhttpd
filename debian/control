@@ -2,9 +2,9 @@ Source: darkhttpd
 Section: httpd
 Priority: optional
 Maintainer: Mateusz Łukasik <mati75@linuxmint.pl>
-Build-Depends: debhelper (>= 9), dh-systemd
+Build-Depends: debhelper (>= 10)
 Standards-Version: 3.9.8
-Homepage: http://unix4lyfe.org/darkhttpd/
+Homepage: https://unix4lyfe.org/darkhttpd/
 Vcs-Git: https://github.com/mati75/darkhttpd.git
 Vcs-Browser: https://github.com/mati75/darkhttpd
 
