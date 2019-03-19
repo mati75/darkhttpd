@@ -1,4 +1,4 @@
-darkhttpd (1.12-1) unstable; urgency=low
+darkhttpd (1.12+git20181210-1) unstable; urgency=low
 
   * Initial release. (Closes: #775096) (LP: #901274)
 
