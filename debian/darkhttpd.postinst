@@ -2,12 +2,18 @@
 
 set -e
 
-if [ "$1" = configure ] ; then
+case "$1" in
+    configure)
+        if ! getent passwd www-data > /dev/null; then
+            adduser --system --disabled-password --disabled-login --home /var/www-data \
+                    --quiet --force-badname --group www-data
+        fi
 	if [ ! -e /var/www/darkhttpd/index.* ] ; then
 		mkdir -p /var/www/darkhttpd
 		cp /usr/share/darkhttpd/index.html /var/www/darkhttpd/index.html
 	fi
-fi
+        ;;
+esac
 
 #DEBHELPER#
 
