@@ -15,8 +15,8 @@ Pre-Depends: ${misc:Pre-Depends}
 Provides: httpd
 Recommends: logrotate
 Description: secure, lightweight, fast HTTP server
- darkhttpd is a secure, lightweight, fast, single-threaded 
- HTTP/1.1 server for static content. Features: 
+ darkhttpd is a secure, lightweight, fast, single-threaded
+ HTTP/1.1 server for static content. Features:
  .
   * Single binary, no other files, no installation needed,
   * Standalone, doesn't need inetd or ucspi-tcp,
