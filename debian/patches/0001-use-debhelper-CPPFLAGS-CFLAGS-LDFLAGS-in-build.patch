@@ -13,7 +13,7 @@ Author: Mateusz Łukasik <mati75@linuxmint.pl>
  all: darkhttpd
  
  darkhttpd: darkhttpd.c
--	$(CC) $(CFLAGS) $(LIBS) darkhttpd.c -o $@
+-	$(CC) $(CFLAGS) $(LDFLAGS) $(LIBS) darkhttpd.c -o $@
 +	$(CC) $(CFLAGS) $(CPPFLAGS) $(LDFLAGS) $(LIBS) darkhttpd.c -o $@
  
  clean:
