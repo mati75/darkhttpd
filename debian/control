@@ -10,7 +10,8 @@ Vcs-Browser: https://github.com/mati75/darkhttpd
 
 Package: darkhttpd
 Architecture: any
-Depends: ${shlibs:Depends}, ${misc:Depends}
+Depends: ${shlibs:Depends}, ${misc:Depends}, adduser
+Pre-Depends: ${misc:Pre-Depends}
 Provides: httpd
 Recommends: logrotate
 Description: secure, lightweight, fast HTTP server

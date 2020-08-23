@@ -1,7 +1,7 @@
 From e292109d4f4fd32c43d19dae073c98351fc46300 Mon Sep 17 00:00:00 2001
 From: Cameron Norman <CameronNemo@users.noreply.github.com>
 Date: Wed, 11 Feb 2015 19:27:53 -0800
-Subject: [PATCH] Create pidfile before dropping priveleges
+Subject: [PATCH] Create pidfile before dropping privileges
 
 ---
  darkhttpd.c | 7 ++++---
