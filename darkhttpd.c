@@ -18,7 +18,7 @@
  */
 
 static const char
-    pkgname[]   = "darkhttpd/1.12.from.git",
+    pkgname[]   = "darkhttpd/1.12+git20200701",
     copyright[] = "copyright (c) 2003-2018 Emil Mikulic";
 
 /* Possible build options: -DDEBUG -DNO_IPV6 */
@@ -69,6 +69,12 @@ static const int debug = 1;
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
+
+#if defined(__has_feature)
+# if __has_feature(memory_sanitizer)
+#  include <sanitizer/msan_interface.h>
+# endif
+#endif
 
 #ifdef __sun__
 # ifndef INADDR_NONE
@@ -229,7 +235,7 @@ struct connection {
     size_t request_length;
 
     /* request fields */
-    char *method, *url, *referer, *user_agent;
+    char *method, *url, *referer, *user_agent, *authorization;
     off_t range_begin, range_end;
     off_t range_begin_given, range_end_given;
 
@@ -295,6 +301,7 @@ static char *pidfile_name = NULL;   /* NULL = no pidfile */
 static int want_chroot = 0, want_daemon = 0, want_accf = 0,
            want_keepalive = 1, want_server_id = 1;
 static char *server_hdr = NULL;
+static char *auth_key = NULL;
 static uint64_t num_requests = 0, total_in = 0, total_out = 0;
 static int accepting = 1;           /* set to 0 to stop accept()ing */
 
@@ -310,6 +317,7 @@ static gid_t drop_gid = INVALID_GID;
 static const char *default_extension_map[] = {
     "application/ogg"      " ogg",
     "application/pdf"      " pdf",
+    "application/wasm"     " wasm",
     "application/xml"      " xsl xml",
     "application/xml-dtd"  " dtd",
     "application/xslt+xml" " xslt",
@@ -318,6 +326,7 @@ static const char *default_extension_map[] = {
     "image/gif"            " gif",
     "image/jpeg"           " jpeg jpe jpg",
     "image/png"            " png",
+    "image/svg+xml"        " svg",
     "text/css"             " css",
     "text/html"            " html htm",
     "text/javascript"      " js",
@@ -325,6 +334,7 @@ static const char *default_extension_map[] = {
     "video/mpeg"           " mpeg mpe mpg",
     "video/quicktime"      " qt mov",
     "video/x-msvideo"      " avi",
+    "video/mp4"            " mp4",
     NULL
 };
 
@@ -482,7 +492,7 @@ static char *split_string(const char *src,
     return dest;
 }
 
-/* Resolve /./ and /../ in a URL, in-place.  Also strip out query params.
+/* Resolve /./ and /../ in a URL, in-place.
  * Returns NULL if the URL is invalid/unsafe, or the original buffer if
  * successful.
  */
@@ -495,7 +505,7 @@ static char *make_safe_url(char *const url) {
         return NULL;
 
     /* Fast case: skip until first double-slash or dot-dir. */
-    for ( ; *src && *src != '?'; ++src) {
+    for ( ; *src; ++src) {
         if (*src == '/') {
             if (src[1] == '/')
                 break;
@@ -510,7 +520,7 @@ static char *make_safe_url(char *const url) {
 
     /* Copy to dst, while collapsing multi-slashes and handling dot-dirs. */
     dst = src;
-    while (*src && *src != '?') {
+    while (*src) {
         if (*src != '/')
             *dst++ = *src++;
         else if (*++src == '/')
@@ -926,12 +936,53 @@ static void usage(const char *argv0) {
     "\t\tIf a connection is idle for more than this many seconds,\n"
     "\t\tit will be closed. Set to zero to disable timeouts.\n\n",
     timeout_secs);
+    printf("\t--auth username:password\n"
+    "\t\tEnable basic authentication.\n\n");
 #ifdef HAVE_INET6
     printf("\t--ipv6\n"
     "\t\tListen on IPv6 address.\n\n");
 #else
     printf("\t(This binary was built without IPv6 support: -DNO_IPV6)\n\n");
 #endif
+}
+
+static char *base64_encode(char *str) {
+    const char base64_table[] = {
+        'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H',
+        'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P',
+        'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X',
+        'Y', 'Z', 'a', 'b', 'c', 'd', 'e', 'f',
+        'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n',
+        'o', 'p', 'q', 'r', 's', 't', 'u', 'v',
+        'w', 'x', 'y', 'z', '0', '1', '2', '3',
+        '4', '5', '6', '7', '8', '9', '+', '/'};
+
+    int input_length = strlen(str);
+    int output_length = 4 * ((input_length + 2) / 3);
+
+    char *encoded_data = malloc(output_length+1);
+    if (encoded_data == NULL) return NULL;
+
+    for (int i = 0, j = 0; i < input_length;) {
+
+        uint32_t octet_a = i < input_length ? (unsigned char)str[i++] : 0;
+        uint32_t octet_b = i < input_length ? (unsigned char)str[i++] : 0;
+        uint32_t octet_c = i < input_length ? (unsigned char)str[i++] : 0;
+
+        uint32_t triple = (octet_a << 0x10) + (octet_b << 0x08) + octet_c;
+
+        encoded_data[j++] = base64_table[(triple >> 3 * 6) & 0x3F];
+        encoded_data[j++] = base64_table[(triple >> 2 * 6) & 0x3F];
+        encoded_data[j++] = base64_table[(triple >> 1 * 6) & 0x3F];
+        encoded_data[j++] = base64_table[(triple >> 0 * 6) & 0x3F];
+    }
+
+    const int mod_table[] = {0, 2, 1};
+    for (int i = 0; i < mod_table[input_length % 3]; i++)
+        encoded_data[output_length - 1 - i] = '=';
+    encoded_data[output_length] = '\0';
+
+    return encoded_data;
 }
 
 /* Returns 1 if string is a number, 0 otherwise.  Set num to NULL if
@@ -1088,6 +1139,14 @@ static void parse_commandline(const int argc, char *argv[]) {
                 errx(1, "missing number after --timeout");
             timeout_secs = (int)xstr_to_num(argv[i]);
         }
+        else if (strcmp(argv[i], "--auth") == 0) {
+            if (++i >= argc || strchr(argv[i], ':') == NULL)
+                errx(1, "missing 'user:pass' after --auth");
+
+            char *key = base64_encode(argv[i]);
+            xasprintf(&auth_key, "Basic %s", key);
+            free(key);
+        }
 #ifdef HAVE_INET6
         else if (strcmp(argv[i], "--ipv6") == 0) {
             inet6 = 1;
@@ -1111,6 +1170,7 @@ static struct connection *new_connection(void) {
     conn->url = NULL;
     conn->referer = NULL;
     conn->user_agent = NULL;
+    conn->authorization = NULL;
     conn->range_begin = 0;
     conn->range_end = 0;
     conn->range_begin_given = 0;
@@ -1220,9 +1280,22 @@ static void logencode(const char *src, char *dest) {
     dest[j] = '\0';
 }
 
+/* Format [when] as a CLF date format, stored in the specified buffer.  The same
+ * buffer is returned for convenience.
+ */
+#define CLF_DATE_LEN 29 /* strlen("[10/Oct/2000:13:55:36 -0700]")+1 */
+static char *clf_date(char *dest, const time_t when) {
+    time_t when_copy = when;
+    if (strftime(dest, CLF_DATE_LEN,
+                 "[%d/%b/%Y:%H:%M:%S %z]", localtime(&when_copy)) == 0)
+        errx(1, "strftime() failed [%s]", dest);
+    return dest;
+}
+
 /* Add a connection's details to the logfile. */
 static void log_connection(const struct connection *conn) {
-    char *safe_method, *safe_url, *safe_referer, *safe_user_agent;
+    char *safe_method, *safe_url, *safe_referer, *safe_user_agent,
+    dest[CLF_DATE_LEN];
 
     if (logfile == NULL)
         return;
@@ -1231,13 +1304,14 @@ static void log_connection(const struct connection *conn) {
     if (conn->method == NULL)
         return; /* invalid - didn't parse - maybe too long */
 
-#define make_safe(x) \
+#define make_safe(x) do { \
     if (conn->x) { \
         safe_##x = xmalloc(strlen(conn->x)*3 + 1); \
         logencode(conn->x, safe_##x); \
     } else { \
         safe_##x = NULL; \
-    }
+    } \
+} while(0)
 
     make_safe(method);
     make_safe(url);
@@ -1246,9 +1320,9 @@ static void log_connection(const struct connection *conn) {
 
 #define use_safe(x) safe_##x ? safe_##x : ""
 
-    fprintf(logfile, "%lu %s \"%s %s\" %d %llu \"%s\" \"%s\"\n",
-        (unsigned long int)now,
+    fprintf(logfile, "%s - - %s \"%s %s HTTP/1.1\" %d %llu \"%s\" \"%s\"\n",
         get_address_text(&conn->client),
+        clf_date(dest, now),
         use_safe(method),
         use_safe(url),
         conn->http_code,
@@ -1258,7 +1332,7 @@ static void log_connection(const struct connection *conn) {
         );
     fflush(logfile);
 
-#define free_safe(x) if (safe_##x) free(safe_##x);
+#define free_safe(x) if (safe_##x) free(safe_##x)
 
     free_safe(method);
     free_safe(url);
@@ -1280,6 +1354,7 @@ static void free_connection(struct connection *conn) {
     if (conn->url != NULL) free(conn->url);
     if (conn->referer != NULL) free(conn->referer);
     if (conn->user_agent != NULL) free(conn->user_agent);
+    if (conn->authorization != NULL) free(conn->authorization);
     if (conn->header != NULL && !conn->header_dont_free) free(conn->header);
     if (conn->reply != NULL && !conn->reply_dont_free) free(conn->reply);
     if (conn->reply_fd != -1) xclose(conn->reply_fd);
@@ -1303,6 +1378,7 @@ static void recycle_connection(struct connection *conn) {
     conn->url = NULL;
     conn->referer = NULL;
     conn->user_agent = NULL;
+    conn->authorization = NULL;
     conn->range_begin = 0;
     conn->range_end = 0;
     conn->range_begin_given = 0;
@@ -1434,6 +1510,9 @@ static void default_reply(struct connection *conn,
      errcode, errname, errname, reason, generated_on(date));
     free(reason);
 
+    const char auth_header[] =
+        "WWW-Authenticate: Basic realm=\"User Visible Realm\"\r\n";
+
     conn->header_length = xasprintf(&(conn->header),
      "HTTP/1.1 %d %s\r\n"
      "Date: %s\r\n"
@@ -1442,9 +1521,11 @@ static void default_reply(struct connection *conn,
      "%s" /* keep-alive */
      "Content-Length: %llu\r\n"
      "Content-Type: text/html; charset=UTF-8\r\n"
+     "%s"
      "\r\n",
      errcode, errname, date, server_hdr, keep_alive(conn),
-     llu(conn->reply_length));
+     llu(conn->reply_length),
+     (auth_key != NULL ? auth_header : ""));
 
     conn->reply_type = REPLY_GENERATED;
     conn->http_code = errcode;
@@ -1645,6 +1726,7 @@ static int parse_request(struct connection *conn) {
     /* parse important fields */
     conn->referer = parse_field(conn, "Referer: ");
     conn->user_agent = parse_field(conn, "User-Agent: ");
+    conn->authorization = parse_field(conn, "Authorization: ");
     parse_range_field(conn);
     return 1;
 }
@@ -1845,11 +1927,15 @@ static void generate_dir_listing(struct connection *conn, const char *path) {
 
 /* Process a GET/HEAD request. */
 static void process_get(struct connection *conn) {
-    char *decoded_url, *target, *if_mod_since;
+    char *decoded_url, *end, *target, *if_mod_since;
     char date[DATE_LEN], lastmod[DATE_LEN];
     const char *mimetype = NULL;
     const char *forward_to = NULL;
     struct stat filestat;
+
+    /* strip out query params */
+    if ((end = strchr(conn->url, '?')) != NULL)
+        *end = '\0';
 
     /* work out path of file being requested */
     decoded_url = urldecode(conn->url);
@@ -2073,9 +2159,18 @@ static void process_get(struct connection *conn) {
 /* Process a request: build the header and reply, advance state. */
 static void process_request(struct connection *conn) {
     num_requests++;
+
     if (!parse_request(conn)) {
         default_reply(conn, 400, "Bad Request",
             "You sent a request that the server couldn't understand.");
+    }
+    /* fail if: (auth_enabled) AND (client supplied invalid credentials) */
+    if (auth_key != NULL &&
+            (conn->authorization == NULL ||
+             strcmp(conn->authorization, auth_key)))
+    {
+        default_reply(conn, 401, "Unauthorized",
+            "Access denied due to invalid credentials.");
     }
     else if (strcmp(conn->method, "GET") == 0) {
         process_get(conn);
@@ -2275,6 +2370,10 @@ static ssize_t send_from_file(const int s, const int fd,
 static void poll_send_reply(struct connection *conn)
 {
     ssize_t sent;
+    /* off_t can be wider than size_t, avoid overflow in send_len */
+    const size_t max_size_t = ~((size_t)0);
+    off_t send_len = conn->reply_length - conn->reply_sent;
+    if (send_len > max_size_t) send_len = max_size_t;
 
     assert(conn->state == SEND_REPLY);
     assert(!conn->header_only);
@@ -2282,14 +2381,13 @@ static void poll_send_reply(struct connection *conn)
         assert(conn->reply_length >= conn->reply_sent);
         sent = send(conn->socket,
             conn->reply + conn->reply_start + conn->reply_sent,
-            (size_t)(conn->reply_length - conn->reply_sent), 0);
+            (size_t)send_len, 0);
     }
     else {
         errno = 0;
         assert(conn->reply_length >= conn->reply_sent);
         sent = send_from_file(conn->socket, conn->reply_fd,
-            conn->reply_start + conn->reply_sent,
-            (size_t)(conn->reply_length - conn->reply_sent));
+            conn->reply_start + conn->reply_sent, (size_t)send_len);
         if (debug && (sent < 1))
             printf("send_from_file returned %lld (errno=%d %s)\n",
                 (long long)sent, errno, strerror(errno));
@@ -2347,8 +2445,9 @@ static void httpd_poll(void) {
     max_fd = 0;
 
     /* set recv/send fd_sets */
-#define MAX_FD_SET(sock, fdset) { FD_SET(sock,fdset); \
-                                max_fd = (max_fd<sock) ? sock : max_fd; }
+#define MAX_FD_SET(sock, fdset) do { FD_SET(sock,fdset); \
+                                max_fd = (max_fd<sock) ? sock : max_fd; } \
+                                while (0)
     if (accepting) MAX_FD_SET(sockin, &recv_set);
 
     LIST_FOREACH_SAFE(conn, &connlist, entries, next) {
@@ -2370,6 +2469,13 @@ static void httpd_poll(void) {
         }
     }
 #undef MAX_FD_SET
+
+#if defined(__has_feature)
+# if __has_feature(memory_sanitizer)
+    __msan_unpoison(&recv_set, sizeof(recv_set));
+    __msan_unpoison(&send_set, sizeof(send_set));
+# endif
+#endif
 
     /* -select- */
     if (debug) {
@@ -2681,6 +2787,7 @@ int main(int argc, char **argv) {
         free(keep_alive_field);
         free(wwwroot);
         free(server_hdr);
+        free(auth_key);
     }
 
     /* usage stats */
