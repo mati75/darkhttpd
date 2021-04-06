@@ -1,2 +1,3 @@
 version=4
-https://unix4lyfe.org/darkhttpd/darkhttpd-(.*)\.tar\.bz2
+opts=filenamemangle=s/.+\/v?(\d\S+)\.tar\.gz/darkhttpd-$1\.tar\.gz/ \
+  https://github.com/emikulic/darkhttpd/tags .*/v?(\d\S+)\.tar\.gz
