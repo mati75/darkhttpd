@@ -1,6 +1,6 @@
 /* darkhttpd - a simple, single-threaded, static content webserver.
  * https://unix4lyfe.org/darkhttpd/
- * Copyright (c) 2003-2018 Emil Mikulic <emikulic@gmail.com>
+ * Copyright (c) 2003-2021 Emil Mikulic <emikulic@gmail.com>
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the
@@ -18,8 +18,8 @@
  */
 
 static const char
-    pkgname[]   = "darkhttpd/1.12+git20200701",
-    copyright[] = "copyright (c) 2003-2018 Emil Mikulic";
+    pkgname[]   = "darkhttpd/1.13",
+    copyright[] = "copyright (c) 2003-2021 Emil Mikulic";
 
 /* Possible build options: -DDEBUG -DNO_IPV6 */
 
@@ -1529,6 +1529,9 @@ static void default_reply(struct connection *conn,
 
     conn->reply_type = REPLY_GENERATED;
     conn->http_code = errcode;
+
+    /* Reset reply_start in case the request set a range. */
+    conn->reply_start = 0;
 }
 
 static void redirect(struct connection *conn, const char *format, ...)
@@ -1865,7 +1868,10 @@ static void generate_dir_listing(struct connection *conn, const char *path) {
     listing = make_apbuf();
     append(listing, "<html>\n<head>\n <title>");
     append(listing, conn->url);
-    append(listing, "</title>\n</head>\n<body>\n<h1>");
+    append(listing,
+            "</title>\n"
+            "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n"
+            "</head>\n<body>\n<h1>");
     append(listing, conn->url);
     append(listing, "</h1>\n<tt><pre>\n");
 
@@ -2165,7 +2171,7 @@ static void process_request(struct connection *conn) {
             "You sent a request that the server couldn't understand.");
     }
     /* fail if: (auth_enabled) AND (client supplied invalid credentials) */
-    if (auth_key != NULL &&
+    else if (auth_key != NULL &&
             (conn->authorization == NULL ||
              strcmp(conn->authorization, auth_key)))
     {
