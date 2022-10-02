@@ -1,3 +1,10 @@
+darkhttpd (1.14-1) unstable; urgency=medium
+
+  * New upstream release.
+  * Bump Standards-Version to 4.6.1.
+
+ -- Mateusz Łukasik <mati75@linuxmint.pl>  Sun, 02 Oct 2022 16:51:17 +0200
+
 darkhttpd (1.13-1) unstable; urgency=low
 
   * Initial release. (Closes: #775096) (LP: #901274)
