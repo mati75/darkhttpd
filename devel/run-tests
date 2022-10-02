@@ -22,6 +22,7 @@ runtests() {
     rm -rf $DIR || exit 1
   fi
   mkdir $DIR || exit 1
+  mkdir $DIR/\( || exit 1
   mkdir $DIR/forbidden || exit 1
   chmod 0 $DIR/forbidden || exit 1
   mkdir $DIR/unreadable || exit 1
@@ -119,6 +120,15 @@ runtests() {
   kill $PID
   wait $PID
 
+  echo "===> run --forward-https tests"
+  ./a.out $DIR --port $PORT --forward-https \
+    >>test.out.stdout 2>>test.out.stderr &
+  PID=$!
+  kill -0 $PID || exit 1
+  python3 test_forward_https.py
+  kill $PID
+  wait $PID
+
   if [[ -s test.out.stderr ]]; then
     echo "FAIL: stderr should have been empty."
     exit 1
@@ -148,22 +158,23 @@ $CC -O2 -Wall -DNO_IPV6 ../darkhttpd.c || exit 1
 # -fsanitize=address produces stderr and crashes.
 # -fsanitize=memory produces stderr and crashes.
 
-# msan first.
-if ! $CLANG -v 2>/dev/null; then
-  echo "***WARNING*** Can't find clang."
-  echo "Skipping memory sanitizer. Try setting the \$CLANG env var."
-else
-  echo "===> building a.out for msan"
-  $CLANG -g -O2 -fsanitize=memory -DDEBUG -DAPBUF_INIT=1 \
-    ../darkhttpd.c || exit 1
-  (runtests) || {
-    echo "FAILED! stderr was:"
-    echo "---"
-    cat test.out.stderr
-    echo "---"
-    exit 1
-  }
-fi
+# msan disabled due to issues with dlent.
+## # msan first.
+## if ! $CLANG -v 2>/dev/null; then
+##   echo "***WARNING*** Can't find clang."
+##   echo "Skipping memory sanitizer. Try setting the \$CLANG env var."
+## else
+##   echo "===> building a.out for msan"
+##   $CLANG -g -O2 -fsanitize=memory -DDEBUG -DAPBUF_INIT=1 \
+##     ../darkhttpd.c || exit 1
+##   (runtests) || {
+##     echo "FAILED! stderr was:"
+##     echo "---"
+##     cat test.out.stderr
+##     echo "---"
+##     exit 1
+##   }
+## fi
 
 # asan and coverage next.
 echo "===> building a.out and darkhttpd.gcno for coverage + asan + ubsan"

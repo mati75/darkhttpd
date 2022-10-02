@@ -5,6 +5,7 @@ https://unix4lyfe.org/darkhttpd/
 When you need a web server in a hurry.
 
 Features:
+
 * Simple to set up:
   * Single binary, no other files, no installation needed.
   * Standalone, doesn't need `inetd` or `ucspi-tcp`.
@@ -24,8 +25,10 @@ Features:
 * At some point worked on FreeBSD, Linux, OpenBSD, Solaris.
 * ISC license.
 * suckless.org says [darkhttpd sucks less](http://suckless.org/rocks/).
+* Small Docker image (<100KB)
 
 Security:
+
 * Can log accesses, including Referer and User-Agent.
 * Can chroot.
 * Can drop privileges.
@@ -34,6 +37,7 @@ Security:
 * Drops overly long requests.
 
 Limitations:
+
 * Only serves static content - no CGI.
 
 ## How to build darkhttpd
@@ -42,6 +46,12 @@ Simply run make:
 
 ```
 make
+```
+
+If `cc` is not on your `PATH` as an alias to your C compiler, you may need to specify it. For example,
+
+```
+CC=gcc make
 ```
 
 ## How to run darkhttpd
@@ -140,6 +150,19 @@ run darkhttpd without any arguments:
 
 ```
 ./darkhttpd
+```
+
+## How to run darkhttpd in Docker
+
+First, build the image.
+```
+docker build -t darkhttpd .
+```
+Then run using volumes for the served files and port mapping for access.
+
+For example, the following would serve files from the current user's dev/mywebsite directory on http://localhost:8080/
+```
+docker run -p 8080:80 -v ~/dev/mywebsite:/var/www/htdocs:ro darkhttpd
 ```
 
 Enjoy.
