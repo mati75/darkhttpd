@@ -1,3 +1,9 @@
+darkhttpd (1.14-2) unstable; urgency=medium
+
+  * debian: keep systemd service under /usr 
+
+ -- Mateusz Łukasik <mati75@linuxmint.pl>  Tue, 31 Oct 2023 17:39:26 +0100
+
 darkhttpd (1.14-1) unstable; urgency=medium
 
   * New upstream release.

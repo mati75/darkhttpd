@@ -11,3 +11,11 @@
 1.10 - Added --forward-all, strip query parameters from URL.
 1.11 - Cleanups, call setgroups() before setgid().
 1.12 - Added --no-listing, --default-mimetype, improve URL escaping, set listing charset to UTF-8, added support for IPv6.
+1.13 - And bump copyright year.
+1.14 dd support for logging with syslog.
+Fix hung connection from consecutive keep-alive requests.
+Fix high CPU usage when timeout is disabled.
+Add --forward-https.
+Make header parsing case insensitive, to work behind an HTTP2 reverse proxy.
+Add trailing slash to links for directories.
+Fix crash when a file has a large (year 10,000+) mtime.

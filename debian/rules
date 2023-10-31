@@ -11,3 +11,6 @@ override_dh_installman:
 
 override_dh_installchangelogs:
 	dh_installchangelogs -k debian/upstream.changelog
+
+override_dh_installsystemd:
+	#disable since debhelper not support install units to /usr 

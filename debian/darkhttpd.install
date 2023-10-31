@@ -1,2 +1,3 @@
 darkhttpd usr/bin
 debian/index.html usr/share/darkhttpd
+debian/darkhttpd.service usr/lib/systemd/system/

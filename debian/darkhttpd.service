@@ -1,10 +1,15 @@
 [Unit]
 Description=Darkhttpd Webserver daemon
+After=network.target
 
 [Service]
 EnvironmentFile=-/etc/default/darkhttpd
 ExecStart=/usr/bin/darkhttpd $DARKHTTPD_ROOT --daemon $DARKHTTPD_FLAGS
-Type=forking
+Type=simple
+ProtectSystem=full
+ProtectHome=on
+PrivateDevices=on
+NoNewPrivileges=on
 
 [Install]
 WantedBy=multi-user.target
