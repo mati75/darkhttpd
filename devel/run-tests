@@ -120,6 +120,22 @@ runtests() {
   kill $PID
   wait $PID
 
+  echo "===> run --header tests"
+  # Wrong flags:
+  ./a.out . --header >/dev/null 2>/dev/null
+  ./a.out . --header missing_colon >/dev/null 2>/dev/null
+  ./a.out . --header $'X-Header: Abusive\r\n\r\nBody' >/dev/null 2>/dev/null
+  # Correct flags:
+  ./a.out $DIR --port $PORT \
+    --header 'X-Header-A: First Value' --header 'X-Header-B: Second Value' \
+    --forward example.com http://www.example.com \
+    >>test.out.stdout 2>>test.out.stderr &
+  PID=$!
+  kill -0 $PID || exit 1
+  python3 test_custom_headers.py
+  kill $PID
+  wait $PID
+
   echo "===> run --forward-https tests"
   ./a.out $DIR --port $PORT --forward-https \
     >>test.out.stdout 2>>test.out.stderr &
@@ -137,12 +153,20 @@ runtests() {
 
 # --- main ---
 
-# Unit test.
+# Unit tests.
 echo "===> test_make_safe_uri"
 $CC -g -O2 -fsanitize=address -fsanitize=undefined \
   test_make_safe_uri.c -o test_make_safe_uri || exit 1
 if ./test_make_safe_uri | egrep '^FAIL:'; then
   echo test_make_safe_uri failed >&2
+  exit 1
+fi
+
+echo "===> test_password_equal"
+$CC -g -O2 -fsanitize=address -fsanitize=undefined \
+  test_password_equal.c -o test_password_equal || exit 1
+if ./test_password_equal | egrep '^FAIL:'; then
+  echo test_password_equal failed >&2
   exit 1
 fi
 
