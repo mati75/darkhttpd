@@ -1,3 +1,9 @@
+darkhttpd (1.15-1) UNRELEASED; urgency=medium
+
+  * New upstream release.
+
+ -- Mateusz Łukasik <mati75@linuxmint.pl>  Fri, 19 Jan 2024 11:48:17 +0100
+
 darkhttpd (1.14-2) unstable; urgency=medium
 
   * debian: keep systemd service under /usr 
