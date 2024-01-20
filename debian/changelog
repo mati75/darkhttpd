@@ -1,8 +1,8 @@
-darkhttpd (1.15-1) UNRELEASED; urgency=medium
+darkhttpd (1.15-1) unstable; urgency=medium
 
   * New upstream release.
 
- -- Mateusz Łukasik <mati75@linuxmint.pl>  Fri, 19 Jan 2024 11:48:17 +0100
+ -- Mateusz Łukasik <mati75@linuxmint.pl>  Fri, 19 Jan 2024 11:48:48 +0100
 
 darkhttpd (1.14-2) unstable; urgency=medium
 
