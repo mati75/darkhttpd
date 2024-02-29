@@ -6,8 +6,8 @@ Author: Mateusz Łukasik <mati75@linuxmint.pl>
 @@ -1,14 +1,14 @@
 -CC?=cc
 -CFLAGS?=-O
-+CC?+=cc
-+CFLAGS?+=-O
++CC+=cc
++CFLAGS+=-O
  LIBS=`[ \`uname\` = "SunOS" ] && echo -lsocket -lnsl -lsendfile`
  
  all: darkhttpd
@@ -20,5 +20,5 @@ Author: Mateusz Łukasik <mati75@linuxmint.pl>
 -	$(CC) -static $(CFLAGS) $(LDFLAGS) $(LIBS) darkhttpd.c -o $@
 +	$(CC) -static $(CFLAGS) $(CPPFLAGS) $(LDFLAGS) $(LIBS) darkhttpd.c -o $@
  
- clean:
- 	rm -f darkhttpd core darkhttpd.core darkhttpd-static darkhttpd-static.core
+ test:
+ 	$(MAKE) -C devel

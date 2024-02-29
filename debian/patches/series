@@ -1,2 +1,2 @@
-0001-use-debhelper-CPPFLAGS-CFLAGS-LDFLAGS-in-build.patch
+#0001-use-debhelper-CPPFLAGS-CFLAGS-LDFLAGS-in-build.patch
 0002-create_pidfile_before_dropping_priveleges.patch

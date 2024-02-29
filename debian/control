@@ -2,7 +2,7 @@ Source: darkhttpd
 Section: httpd
 Priority: optional
 Maintainer: Mateusz Łukasik <mati75@linuxmint.pl>
-Build-Depends: debhelper-compat (= 13), debhelper (>= 13.11.6)
+Build-Depends: debhelper-compat (= 13), python3
 Standards-Version: 4.6.2
 Homepage: https://unix4lyfe.org/darkhttpd/
 Vcs-Git: https://github.com/mati75/darkhttpd.git

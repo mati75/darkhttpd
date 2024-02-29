@@ -19,3 +19,12 @@ Add --forward-https.
 Make header parsing case insensitive, to work behind an HTTP2 reverse proxy.
 Add trailing slash to links for directories.
 Fix crash when a file has a large (year 10,000+) mtime.
+
+darkhttpd 1.15
+Try to avoid leaking the length of the --auth password through timing side-channels.
+
+
+darkhttpd 1.16
+
+Support chroot as non-root on FreeBSD 14+
+Listen to IPv4 and IPv6 at the same time when --ipv6 is passed.
