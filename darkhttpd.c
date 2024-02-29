@@ -18,7 +18,7 @@
  */
 
 static const char
-    pkgname[]   = "darkhttpd/1.15",
+    pkgname[]   = "darkhttpd/1.16",
     copyright[] = "copyright (c) 2003-2024 Emil Mikulic";
 
 /* Possible build options: -DDEBUG -DNO_IPV6 */
@@ -70,6 +70,18 @@ static const int debug = 1;
 #include <syslog.h>
 #include <time.h>
 #include <unistd.h>
+
+/* This is for non-root chroot support on FreeBSD 14.0+ */
+/* Must set sysctl security.bsd.unprivileged_chroot=1 to allow this. */
+#ifdef __FreeBSD__
+# if __FreeBSD_version >= 1400000
+#  define HAVE_NON_ROOT_CHROOT
+# endif
+#endif
+
+#ifdef HAVE_NON_ROOT_CHROOT
+#include <sys/procctl.h>
+#endif
 
 #if defined(__has_feature)
 # if __has_feature(memory_sanitizer)
@@ -782,7 +794,7 @@ static const char *get_address_text(const void *addr) {
     }
 }
 
-/* Initialize the sockin global.  This is the socket that we accept
+/* Initialize the sockin global. This is the socket that we accept
  * connections from.
  */
 static void init_sockin(void) {
@@ -797,7 +809,7 @@ static void init_sockin(void) {
     if (inet6) {
         memset(&addrin6, 0, sizeof(addrin6));
         if (inet_pton(AF_INET6, bindaddr ? bindaddr : "::",
-                      &addrin6.sin6_addr) == -1) {
+                      &addrin6.sin6_addr) != 1) {
             errx(1, "malformed --addr argument");
         }
         sockin = socket(PF_INET6, SOCK_STREAM, 0);
@@ -825,6 +837,18 @@ static void init_sockin(void) {
     if (setsockopt(sockin, IPPROTO_TCP, TCP_NODELAY,
             &sockopt, sizeof(sockopt)) == -1)
         err(1, "setsockopt(TCP_NODELAY)");
+
+#ifdef HAVE_INET6
+    if (inet6) {
+        /* Listen on IPv4 and IPv6 on the same socket.               */
+        /* Only relevant if listening on ::, but behaves normally if */
+        /* listening on a specific address.                          */
+        sockopt = 0;
+        if (setsockopt(sockin, IPPROTO_IPV6, IPV6_V6ONLY,
+                &sockopt, sizeof (sockopt)) < 0)
+            err(1, "setsockopt (IPV6_V6ONLY)");
+    }
+#endif
 
 #ifdef TORTURE
     /* torture: cripple the kernel-side send buffer so we can only squeeze out
@@ -2882,6 +2906,14 @@ int main(int argc, char **argv) {
 
     /* security */
     if (want_chroot) {
+        #ifdef HAVE_NON_ROOT_CHROOT
+        /* We run this even as root, which should never be a bad thing. */
+        int arg = PROC_NO_NEW_PRIVS_ENABLE;
+        int error = procctl(P_PID, (int)getpid(), PROC_NO_NEW_PRIVS_CTL, &arg);
+        if (error != 0)
+            err(1, "procctl");
+        #endif
+
         tzset(); /* read /etc/localtime before we chroot */
         if (chdir(wwwroot) == -1)
             err(1, "chdir(%s)", wwwroot);
