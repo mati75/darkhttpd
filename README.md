@@ -23,6 +23,7 @@ Features:
 * Can serve 301 redirects based on Host header.
 * Uses sendfile() on FreeBSD, Solaris and Linux.
 * Can use acceptfilter on FreeBSD.
+* Can use chroot as non-root on FreeBSD 14+.
 * At some point worked on FreeBSD, Linux, OpenBSD, Solaris.
 * ISC license.
 * suckless.org says [darkhttpd sucks less](http://suckless.org/rocks/).
@@ -174,3 +175,15 @@ docker run -p 8080:80 -v ~/dev/mywebsite:/var/www/htdocs:ro darkhttpd
 ```
 
 Enjoy.
+
+## How to test darkhttpd
+
+```
+make test
+```
+
+If that isn't working for you, and you're on FreeBSD, you may need to run something closer to the following:
+
+```
+ASAN_OPTIONS=" " PYTHON=python3.11 make test
+```
