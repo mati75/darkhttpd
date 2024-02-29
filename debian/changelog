@@ -1,3 +1,9 @@
+darkhttpd (1.16-2) unstable; urgency=medium
+
+  * Fix FTBFS.
+
+ -- Mateusz Łukasik <mati75@linuxmint.pl>  Thu, 29 Feb 2024 19:02:25 +0100
+
 darkhttpd (1.16-1) unstable; urgency=medium
 
   * New upstream release.
