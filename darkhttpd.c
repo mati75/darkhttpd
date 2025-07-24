@@ -1,6 +1,6 @@
 /* darkhttpd - a simple, single-threaded, static content webserver.
  * https://unix4lyfe.org/darkhttpd/
- * Copyright (c) 2003-2024 Emil Mikulic <emikulic@gmail.com>
+ * Copyright (c) 2003-2025 Emil Mikulic <emikulic@gmail.com>
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the
@@ -18,8 +18,8 @@
  */
 
 static const char
-    pkgname[]   = "darkhttpd/1.16",
-    copyright[] = "copyright (c) 2003-2024 Emil Mikulic";
+    pkgname[]   = "darkhttpd/1.17",
+    copyright[] = "copyright (c) 2003-2025 Emil Mikulic";
 
 /* Possible build options: -DDEBUG -DNO_IPV6 */
 
@@ -71,12 +71,25 @@ static const int debug = 1;
 #include <time.h>
 #include <unistd.h>
 
+/* The time formatting that we use in directory listings.                    */
+/* An example of the default is 2013-09-09 13:01, which should be compatible */
+/* with xbmc/kodi.                                                           */
+#define DIR_LIST_MTIME_FORMAT "%Y-%m-%d %R"
+#define DIR_LIST_MTIME_SIZE 16 + 1 /* How large the buffer will need to be. */
+
 /* This is for non-root chroot support on FreeBSD 14.0+ */
 /* Must set sysctl security.bsd.unprivileged_chroot=1 to allow this. */
 #ifdef __FreeBSD__
 # if __FreeBSD_version >= 1400000
 #  define HAVE_NON_ROOT_CHROOT
 # endif
+#endif
+
+/* https://github.com/hboetes/mg/issues/7#issuecomment-475869095 */
+#if defined(__APPLE__) || defined(__NetBSD__)
+#define st_atim st_atimespec
+#define st_ctim st_ctimespec
+#define st_mtim st_mtimespec
 #endif
 
 #ifdef HAVE_NON_ROOT_CHROOT
@@ -314,7 +327,8 @@ static char *logfile_name = NULL;   /* NULL = no logging */
 static FILE *logfile = NULL;
 static char *pidfile_name = NULL;   /* NULL = no pidfile */
 static int want_chroot = 0, want_daemon = 0, want_accf = 0,
-           want_keepalive = 1, want_server_id = 1;
+           want_keepalive = 1, want_server_id = 1, want_single_file = 0,
+           want_hide_dotfiles = 0;
 static char *server_hdr = NULL;
 static char *auth_key = NULL;       /* NULL or "Basic base64_of_password" */
 static char *custom_hdrs = NULL;
@@ -499,8 +513,6 @@ static char *split_string(const char *src,
         const size_t left, const size_t right) {
     char *dest;
     assert(left <= right);
-    assert(left < strlen(src));   /* [left means must be smaller */
-    assert(right <= strlen(src)); /* right) means can be equal or smaller */
 
     dest = xmalloc(right - left + 1);
     memcpy(dest, src+left, right-left);
@@ -784,8 +796,12 @@ static const char *get_address_text(const void *addr) {
 #ifdef HAVE_INET6
     if (inet6) {
         static char text_addr[INET6_ADDRSTRLEN];
-        inet_ntop(AF_INET6, (const struct in6_addr *)addr, text_addr,
-                  INET6_ADDRSTRLEN);
+        const struct in6_addr *in6_addr = addr;
+        inet_ntop(AF_INET6, in6_addr, text_addr, INET6_ADDRSTRLEN);
+        /* IPv4 addresses via dual stack result in mapped IPv6 addresses.
+           Strip the prefix (::ffff:) for plain IPv4 addresses. */
+        if (IN6_IS_ADDR_V4MAPPED(in6_addr))
+            return text_addr + 7;
         return text_addr;
     } else
 #endif
@@ -873,7 +889,7 @@ static void init_sockin(void) {
         if (getsockname(sockin, (struct sockaddr *)&addrin6, &addrin_len) == -1)
             err(1, "getsockname()");
         printf("listening on: http://[%s]:%u/\n",
-            get_address_text(&addrin6.sin6_addr), bindport);
+            get_address_text(&addrin6.sin6_addr), ntohs(addrin6.sin6_port));
     } else
 #endif
     {
@@ -886,7 +902,7 @@ static void init_sockin(void) {
         if (getsockname(sockin, (struct sockaddr *)&addrin, &addrin_len) == -1)
             err(1, "getsockname()");
         printf("listening on: http://%s:%u/\n",
-            get_address_text(&addrin.sin_addr), bindport);
+            get_address_text(&addrin.sin_addr), ntohs(addrin.sin_port));
     }
 
     /* listen on socket */
@@ -917,16 +933,22 @@ static void usage(const char *argv0) {
     printf("\t--addr ip (default: all)\n"
     "\t\tIf multiple interfaces are present, specifies\n"
     "\t\twhich one to bind the listening port to.\n\n");
+#ifdef HAVE_INET6
+    printf("\t--ipv6\n"
+    "\t\tListen on IPv6 address.\n\n");
+#endif
+    printf("\t--daemon (default: don't daemonize)\n"
+    "\t\tDetach from the controlling terminal and run in the background.\n\n");
+    printf("\t--pidfile filename (default: no pidfile)\n"
+    "\t\tWrite PID to the specified file. Note that if you are\n"
+    "\t\tusing --chroot, then the pidfile must be relative to,\n"
+    "\t\tand inside the wwwroot.\n\n");
     printf("\t--maxconn number (default: system maximum)\n"
     "\t\tSpecifies how many concurrent connections to accept.\n\n");
     printf("\t--log filename (default: stdout)\n"
     "\t\tSpecifies which file to append the request log to.\n\n");
     printf("\t--syslog\n"
     "\t\tUse syslog for request log.\n\n");
-    printf("\t--chroot (default: don't chroot)\n"
-    "\t\tLocks server into wwwroot directory for added security.\n\n");
-    printf("\t--daemon (default: don't daemonize)\n"
-    "\t\tDetach from the controlling terminal and run in the background.\n\n");
     printf("\t--index filename (default: %s)\n"
     "\t\tDefault file to serve when a directory is requested.\n\n",
         index_name);
@@ -939,16 +961,19 @@ static void usage(const char *argv0) {
         octet_stream);
     printf("\t--uid uid/uname, --gid gid/gname (default: don't privdrop)\n"
     "\t\tDrops privileges to given uid:gid after initialization.\n\n");
-    printf("\t--pidfile filename (default: no pidfile)\n"
-    "\t\tWrite PID to the specified file.  Note that if you are\n"
-    "\t\tusing --chroot, then the pidfile must be relative to,\n"
-    "\t\tand inside the wwwroot.\n\n");
-    printf("\t--no-keepalive\n"
-    "\t\tDisables HTTP Keep-Alive functionality.\n\n");
+    printf("\t--chroot (default: don't chroot)\n"
+    "\t\tLocks server into wwwroot directory for added security.\n\n");
 #ifdef __FreeBSD__
     printf("\t--accf (default: don't use acceptfilter)\n"
-    "\t\tUse acceptfilter.  Needs the accf_http module loaded.\n\n");
+    "\t\tUse acceptfilter. Needs the accf_http kernel module loaded.\n\n");
 #endif
+    printf("\t--no-keepalive\n"
+    "\t\tDisables HTTP Keep-Alive functionality.\n\n");
+    printf("\t--single-file\n"
+    "\t\tOnly serve a single file provided as /path/to/file instead\n"
+    "\t\tof a whole directory.\n\n");
+    printf("\t--hide-dotfiles\n"
+    "\t\tDon't serve dotfiles.\n\n");
     printf("\t--forward host url (default: don't forward)\n"
     "\t\tWeb forward (301 redirect).\n"
     "\t\tRequests to the host are redirected to the corresponding url.\n"
@@ -957,6 +982,10 @@ static void usage(const char *argv0) {
     printf("\t--forward-all url (default: don't forward)\n"
     "\t\tWeb forward (301 redirect).\n"
     "\t\tAll requests are redirected to the corresponding url.\n\n");
+    printf("\t--forward-https\n"
+    "\t\tIf the client requested HTTP, forward to HTTPS.\n"
+    "\t\tThis is useful if darkhttpd is behind a reverse proxy\n"
+    "\t\tthat supports SSL.\n\n");
     printf("\t--no-server-id\n"
     "\t\tDon't identify the server type in headers\n"
     "\t\tor directory listings.\n\n");
@@ -968,18 +997,11 @@ static void usage(const char *argv0) {
     "\t\tEnable basic authentication. This is *INSECURE*: passwords\n"
     "\t\tare sent unencrypted over HTTP, plus the password is visible\n"
     "\t\tin ps(1) to other users on the system.\n\n");
-    printf("\t--forward-https\n"
-    "\t\tIf the client requested HTTP, forward to HTTPS.\n"
-    "\t\tThis is useful if darkhttpd is behind a reverse proxy\n"
-    "\t\tthat supports SSL.\n\n");
     printf("\t--header 'Header: Value'\n"
     "\t\tAdd a custom header to all responses.\n"
     "\t\tThis option can be specified multiple times, in which case\n"
     "\t\tthe headers are added in order of appearance.\n\n");
-#ifdef HAVE_INET6
-    printf("\t--ipv6\n"
-    "\t\tListen on IPv6 address.\n\n");
-#else
+#ifndef HAVE_INET6
     printf("\t(This binary was built without IPv6 support: -DNO_IPV6)\n\n");
 #endif
 }
@@ -1071,7 +1093,9 @@ static void parse_commandline(const int argc, char *argv[]) {
     wwwroot = xstrdup(argv[1]);
     /* Strip ending slash. */
     len = strlen(wwwroot);
-    if (len > 0)
+    if (len == 0)
+        errx(1, "/path/to/wwwroot cannot be empty");
+    if (len > 1)
         if (wwwroot[len - 1] == '/')
             wwwroot[len - 1] = '\0';
 
@@ -1159,6 +1183,12 @@ static void parse_commandline(const int argc, char *argv[]) {
         }
         else if (strcmp(argv[i], "--syslog") == 0) {
             syslog_enabled = 1;
+        }
+        else if (strcmp(argv[i], "--single-file") == 0) {
+            want_single_file = 1;
+        }
+        else if (strcmp(argv[i], "--hide-dotfiles") == 0) {
+            want_hide_dotfiles = 1;
         }
         else if (strcmp(argv[i], "--forward") == 0) {
             const char *host, *url;
@@ -1342,8 +1372,9 @@ static void logencode(const char *src, char *dest) {
 #define CLF_DATE_LEN 29 /* strlen("[10/Oct/2000:13:55:36 -0700]")+1 */
 static char *clf_date(char *dest, const time_t when) {
     time_t when_copy = when;
-    if (strftime(dest, CLF_DATE_LEN,
-                 "[%d/%b/%Y:%H:%M:%S %z]", localtime(&when_copy)) == 0) {
+    struct tm tm;
+    localtime_r(&when_copy, &tm);
+    if (strftime(dest, CLF_DATE_LEN, "[%d/%b/%Y:%H:%M:%S %z]", &tm) == 0) {
         dest[0] = 0;
     }
     return dest;
@@ -1534,6 +1565,51 @@ static char *urldecode(const char *url) {
     return out;
 }
 
+/**
+ * normalize_path – Convert an absolute-form HTTP request target into an
+ *                   origin-form path so the server can accept requests
+ *                   conforming to RFC 9112 §3.2.2.
+ *
+ * RFC 9112 §3.2.2 permits clients (especially forward proxies) to send the
+ * request-line in “absolute-form”, e.g.:
+ *
+ *     GET http://example.com/foo/bar?q=1 HTTP/1.1
+ *
+ * Many origin servers expect the traditional “origin-form” instead:
+ *
+ *     GET /foo/bar?q=1 HTTP/1.1
+ *
+ * This helper strips the <scheme> "://" and the authority component
+ * ("host[:port]") from an absolute URI, leaving only the path (plus any query
+ * or fragment).  If no ‘/’ is found after the authority, the function returns
+ * “/” to represent the root path, as required by the specification.
+ *
+ * - The transformation is performed **in-place**; therefore the caller must
+ *   pass a writable buffer.
+ * - The returned pointer is identical to the input pointer and refers to the
+ *   normalised path.
+ *
+ * Example:
+ *   char *buf = strdup("https://example.com:8080/foo/bar?a=1#frag");
+ *   printf("%s\n", normalize_path(buf));  // → "/foo/bar?a=1#frag"
+ */
+static char *normalize_path(char *url) {
+    size_t pos = 0;
+    if (url == NULL) return url;
+    if (strncmp(url, "http://", 7) == 0) {
+        pos += 7;
+    } else if (strncmp(url, "https://", 8) == 0) {
+        pos += 8;
+    }
+    if (pos > 0) {
+        while (url[pos] && url[pos] != '/') {
+            pos++;
+        }
+        memmove(url, url+pos, strlen(url)+1-pos);
+    }
+    return url;
+}
+
 /* Returns Connection or Keep-Alive header, depending on conn_close. */
 static const char *keep_alive(const struct connection *conn)
 {
@@ -1570,7 +1646,7 @@ static void default_reply(struct connection *conn,
     rfc1123_date(date, now);
 
     conn->reply_length = xasprintf(&(conn->reply),
-     "<html><head><title>%d %s</title></head><body>\n"
+     "<!DOCTYPE html><html><head><title>%d %s</title></head><body>\n"
      "<h1>%s</h1>\n" /* errname */
      "%s\n" /* reason */
      "<hr>\n"
@@ -1618,7 +1694,7 @@ static void redirect(struct connection *conn, const char *format, ...) {
     rfc1123_date(date, now);
 
     conn->reply_length = xasprintf(&(conn->reply),
-     "<html><head><title>301 Moved Permanently</title></head><body>\n"
+     "<!DOCTYPE html><html><head><title>301 Moved Permanently</title></head><body>\n"
      "<h1>Moved Permanently</h1>\n"
      "Moved to: <a href=\"%s\">%s</a>\n" /* where x 2 */
      "<hr>\n"
@@ -1680,6 +1756,7 @@ static void redirect_https(struct connection *conn) {
 
     /* work out path of file being requested */
     url = urldecode(conn->url);
+    url = normalize_path(url);
 
     /* make sure it's safe */
     if (make_safe_url(url) == NULL) {
@@ -1773,7 +1850,6 @@ static void parse_range_field(struct connection *conn) {
 static int parse_request(struct connection *conn) {
     size_t bound1, bound2;
     char *tmp;
-    assert(conn->request_length == strlen(conn->request));
 
     /* parse method */
     for (bound1 = 0;
@@ -1800,9 +1876,12 @@ static int parse_request(struct connection *conn) {
         (conn->request[bound2] != ' ') &&
         (conn->request[bound2] != '\r') &&
         (conn->request[bound2] != '\n');
-        bound2++)
-            ;
-
+        bound2++) {
+        if (conn->request[bound2] == '\0') {
+            /* don't allow ascii nul in URL */
+            return 0;
+        }
+    }
     conn->url = split_string(conn->request, bound1, bound2);
 
     /* parse protocol to determine conn_close */
@@ -1858,15 +1937,13 @@ static int file_exists(const char *path) {
 }
 
 struct dlent {
-    char *name;
-    int is_dir;
-    off_t size;
+    char *name;            /* The name/path of the entry.                 */
+    int is_dir;            /* If the entry is a directory and not a file. */
+    off_t size;            /* The size of the entry, in bytes.            */
+    struct timespec mtime; /* When the file was last modified.            */
 };
 
 static int dlent_cmp(const void *a, const void *b) {
-    if (strcmp((*((const struct dlent * const *)a))->name, "..") == 0) {
-        return -1;  /* Special-case ".." to come first. */
-    }
     return strcmp((*((const struct dlent * const *)a))->name,
                   (*((const struct dlent * const *)b))->name);
 }
@@ -1893,8 +1970,10 @@ static ssize_t make_sorted_dirlist(const char *path, struct dlent ***output) {
     while ((ent = readdir(dir)) != NULL) {
         struct stat s;
 
-        if (strcmp(ent->d_name, ".") == 0)
-            continue; /* skip "." */
+        if (strcmp(ent->d_name, ".") == 0 || strcmp(ent->d_name, "..") == 0)
+            continue; /* skip "." and ".." */
+        if (want_hide_dotfiles && ent->d_name[0] == '.')
+            continue;
         assert(strlen(ent->d_name) <= MAXNAMLEN);
         sprintf(currname, "%s%s", path, ent->d_name);
         if (stat(currname, &s) == -1)
@@ -1907,6 +1986,7 @@ static ssize_t make_sorted_dirlist(const char *path, struct dlent ***output) {
         list[entries]->name = xstrdup(ent->d_name);
         list[entries]->is_dir = S_ISDIR(s.st_mode);
         list[entries]->size = s.st_size;
+        list[entries]->mtime = s.st_mtim;
         entries++;
     }
     closedir(dir);
@@ -1994,35 +2074,49 @@ static void generate_dir_listing(struct connection *conn, const char *path,
     char date[DATE_LEN], *spaces;
     struct dlent **list;
     ssize_t listsize;
-    size_t maxlen = 2; /* There has to be ".." */
+    size_t maxlen = 3; /* There has to be ".." */
     int i;
     struct apbuf *listing;
 
     listsize = make_sorted_dirlist(path, &list);
     if (listsize == -1) {
-        default_reply(conn, 500, "Internal Server Error",
-                      "Couldn't list directory: %s", strerror(errno));
+        /* opendir() failed */
+        if (errno == EACCES)
+            default_reply(conn, 403, "Forbidden",
+                "You don't have permission to access this URL.");
+        else if (errno == ENOENT)
+            default_reply(conn, 404, "Not Found",
+                "The URL you requested was not found.");
+        else
+            default_reply(conn, 500, "Internal Server Error",
+                "Couldn't list directory: %s", strerror(errno));
         return;
     }
 
     for (i=0; i<listsize; i++) {
         size_t tmp = strlen(list[i]->name);
+        if (list[i]->is_dir)
+            tmp++; /* add 1 for '/' */
         if (maxlen < tmp)
             maxlen = tmp;
     }
 
     listing = make_apbuf();
-    append(listing, "<html>\n<head>\n<title>");
+    append(listing, "<!DOCTYPE html>\n<html>\n<head>\n<title>");
     append_escaped(listing, decoded_url);
     append(listing,
             "</title>\n"
             "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n"
             "</head>\n<body>\n<h1>");
     append_escaped(listing, decoded_url);
-    append(listing, "</h1>\n<tt><pre>\n");
+    append(listing, "</h1>\n<pre>\n");
 
     spaces = xmalloc(maxlen);
     memset(spaces, ' ', maxlen);
+
+    /* append ".." entry if not in wwwroot */
+    if (strncmp(path, wwwroot, strlen(path) - 1) != 0)
+        append(listing, "<a href=\"../\">..</a>/\n");
 
     for (i=0; i<listsize; i++) {
         /* If a filename is made up of entirely unsafe chars,
@@ -2040,11 +2134,22 @@ static void generate_dir_listing(struct connection *conn, const char *path,
         append_escaped(listing, list[i]->name);
         append(listing, "</a>");
 
-        if (list[i]->is_dir)
-            append(listing, "/\n");
+        char buf[DIR_LIST_MTIME_SIZE];
+        struct tm tm;
+        localtime_r(&list[i]->mtime.tv_sec, &tm);
+        strftime(buf, sizeof buf, DIR_LIST_MTIME_FORMAT, &tm);
+
+        if (list[i]->is_dir) {
+            append(listing, "/");
+            appendl(listing, spaces, maxlen-strlen(list[i]->name));
+            append(listing, buf);
+            append(listing, "\n");
+        }
         else {
             appendl(listing, spaces, maxlen-strlen(list[i]->name));
-            appendf(listing, "%10llu\n", llu(list[i]->size));
+            append(listing, " ");
+            append(listing, buf);
+            appendf(listing, " %10llu\n", llu(list[i]->size));
         }
     }
 
@@ -2052,9 +2157,7 @@ static void generate_dir_listing(struct connection *conn, const char *path,
     free(list);
     free(spaces);
 
-    append(listing,
-     "</pre></tt>\n"
-     "<hr>\n");
+    append(listing, "</pre>\n<hr>\n");
 
     rfc1123_date(date, now);
     append(listing, generated_on(date));
@@ -2095,6 +2198,7 @@ static void process_get(struct connection *conn) {
 
     /* work out path of file being requested */
     decoded_url = urldecode(conn->url);
+    decoded_url = normalize_path(decoded_url);
 
     /* make sure it's safe */
     if (make_safe_url(decoded_url) == NULL) {
@@ -2129,8 +2233,25 @@ static void process_get(struct connection *conn) {
         return;
     }
 
-    /* does it end in a slash? serve up url/index_name */
-    if (decoded_url[strlen(decoded_url)-1] == '/') {
+    if (want_hide_dotfiles) {
+        size_t i;
+        for (i = 0; i < strlen(decoded_url) - 1; i++) {
+            if (decoded_url[i] == '/' && decoded_url[i + 1] == '.') {
+                free(decoded_url);
+                /* Don't serve dot files when using --hide-dotfiles */
+                default_reply(conn, 404, "Not Found",
+                    "The URL you requested was not found.");
+                return;
+            }
+        }
+    }
+
+    if (want_single_file) {
+        target = xstrdup(wwwroot);
+        mimetype = url_content_type(wwwroot);
+    }
+    else if (decoded_url[strlen(decoded_url)-1] == '/') {
+        /* does it end in a slash? serve up url/index_name */
         xasprintf(&target, "%s%s%s", wwwroot, decoded_url, index_name);
         if (!file_exists(target)) {
             free(target);
@@ -2190,7 +2311,7 @@ static void process_get(struct connection *conn) {
     }
 
     /* make sure it's a regular file */
-    if (S_ISDIR(filestat.st_mode)) {
+    if ((S_ISDIR(filestat.st_mode)) && (!want_single_file)) {
         redirect(conn, "%s/", conn->url);
         return;
     }
@@ -2489,6 +2610,8 @@ static void poll_send_header(struct connection *conn) {
  * <size>.  Use sendfile() if possible since it's zero-copy on some platforms.
  * Returns the number of bytes sent, 0 on closure, -1 if send() failed, -2 if
  * read error.
+ *
+ * TODO: send headers with sendfile(), this will result in fewer packets.
  */
 static ssize_t send_from_file(const int s, const int fd,
         off_t ofs, size_t size) {
@@ -2863,6 +2986,48 @@ static void pidfile_create(void) {
 }
 /* [<-] end of pidfile helpers. */
 
+static void change_root(void) {
+    #ifdef HAVE_NON_ROOT_CHROOT
+    /* We run this even as root, which should never be a bad thing. */
+    int arg = PROC_NO_NEW_PRIVS_ENABLE;
+    int error = procctl(P_PID, (int)getpid(), PROC_NO_NEW_PRIVS_CTL, &arg);
+    if (error != 0)
+        err(1, "procctl");
+    #endif
+
+    tzset(); /* read /etc/localtime before we chroot */
+    if (want_single_file) {
+        off_t ofs;
+        size_t len = strlen(wwwroot) + 1;
+        char *path = xstrdup(wwwroot);
+        for (ofs = strlen(wwwroot);
+             (ofs >= 0) && (wwwroot[ofs] != '/');
+             ofs--)
+            ;
+        /* wwwroot file is not in current directory */
+        if (ofs >= 0) {
+            path[ofs + 1] = '\0';
+            if (chdir(path) == -1)
+                err(1, "chdir(%s)", path);
+            memmove(wwwroot, &wwwroot[ofs], len - ofs);
+        } else {
+            path[0] = '.';
+            path[1] = '\0';
+        }
+        if (chroot(path) == -1)
+            err(1, "chroot(%s)", path);
+        printf("chrooted to `%s'\n", path);
+        free(path);
+    } else {
+        if (chdir(wwwroot) == -1)
+            err(1, "chdir(%s)", wwwroot);
+        if (chroot(wwwroot) == -1)
+            err(1, "chroot(%s)", wwwroot);
+        printf("chrooted to `%s'\n", wwwroot);
+        wwwroot[0] = '\0'; /* empty string */
+    }
+}
+
 /* Close all sockets and FILEs and exit. */
 static void stop_running(int sig unused) {
     running = 0;
@@ -2906,21 +3071,7 @@ int main(int argc, char **argv) {
 
     /* security */
     if (want_chroot) {
-        #ifdef HAVE_NON_ROOT_CHROOT
-        /* We run this even as root, which should never be a bad thing. */
-        int arg = PROC_NO_NEW_PRIVS_ENABLE;
-        int error = procctl(P_PID, (int)getpid(), PROC_NO_NEW_PRIVS_CTL, &arg);
-        if (error != 0)
-            err(1, "procctl");
-        #endif
-
-        tzset(); /* read /etc/localtime before we chroot */
-        if (chdir(wwwroot) == -1)
-            err(1, "chdir(%s)", wwwroot);
-        if (chroot(wwwroot) == -1)
-            err(1, "chroot(%s)", wwwroot);
-        printf("chrooted to `%s'\n", wwwroot);
-        wwwroot[0] = '\0'; /* empty string */
+        change_root();
     }
     if (drop_gid != INVALID_GID) {
         gid_t list[1];
